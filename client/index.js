@@ -6,10 +6,13 @@ let socket = new WebSocket("ws://localhost:3333");
 console.log("loaded");
 const can = document.getElementById("board");
 const body = document.getElementById("body");
+const promote = document.getElementById("promote");
 
 // npx rollup -c --watch
 
 let Boar,
+    Prom,
+    PromFig = -1,
     IsFigureGot = false,
     IsTravell = false,
     oldPos = vec2(),
@@ -17,7 +20,8 @@ let Boar,
     IsLocked = vec2(-1, -1),
     IsTouchMode = false,
     BoardPoOld = vec2(-2, -2),
-    BoarPoOldOld = vec2(-3, -3),
+    PromPo = vec2(-1, -1),
+    FigToProm = [],
     mess = {};
 
 function addListenerMulti(element, eventNames, listener) {
@@ -28,7 +32,17 @@ function addListenerMulti(element, eventNames, listener) {
 }
 
 function main() {
-    Boar = Board(can, 8);
+    Boar = Board(can, 8, -1 /*, "rgb(35, 35, 35)", "rgb(220, 220, 220)"*/);
+    Prom = Board(promote, promote.width / 100, 1, "rgb(105, 105, 105)", "rgb(145, 145, 145)");
+
+    // promote.insertAdjacentElement("beforebegin", can);
+
+    // Promote
+    FigToProm.push(Image("./Figures/wN.png", Prom, vec2(FigToProm.length, 0), vec2(Prom.cellSizeW, Prom.cellSizeH)));
+    FigToProm.push(Image("./Figures/wC.png", Prom, vec2(FigToProm.length, 0), vec2(Prom.cellSizeW, Prom.cellSizeH)));
+    FigToProm.push(Image("./Figures/wB.png", Prom, vec2(FigToProm.length, 0), vec2(Prom.cellSizeW, Prom.cellSizeH)));
+    FigToProm.push(Image("./Figures/wR.png", Prom, vec2(FigToProm.length, 0), vec2(Prom.cellSizeW, Prom.cellSizeH)));
+    FigToProm.push(Image("./Figures/wQ.png", Prom, vec2(FigToProm.length, 0), vec2(Prom.cellSizeW, Prom.cellSizeH)));
 
     // Pawns
 
@@ -39,12 +53,16 @@ function main() {
     for (let i = 0; i < Boar.nx; i++) {
         Image("./Figures/bP.png", Boar, vec2(i, Boar.ny - 1 - 1), vec2(Boar.cellSizeW));
     }
+    // Image("./Figures/wP.png", Boar, vec2(0, Boar.ny - 2), vec2(Boar.cellSizeW));
+    // Image("./Figures/wP.png", Boar, vec2(1, Boar.ny - 3), vec2(Boar.cellSizeW));
+
+    // Image("./Figures/bP.png", Boar, vec2(5, 2), vec2(Boar.cellSizeW));
 
     // Knights
     Image("./Figures/bN.png", Boar, vec2(1, Boar.ny - 1), vec2(Boar.cellSizeW));
-    Image("./Figures/bN.png", Boar, vec2(Boar.nx - 2, Boar.ny - 1), vec2(Boar.cellSizeW));
+    Image("./Figures/bC.png", Boar, vec2(Boar.nx - 2, Boar.ny - 1), vec2(Boar.cellSizeW));
     Image("./Figures/wN.png", Boar, vec2(1, 0), vec2(Boar.cellSizeW));
-    Image("./Figures/wN.png", Boar, vec2(Boar.nx - 2, 0), vec2(Boar.cellSizeW));
+    Image("./Figures/wC.png", Boar, vec2(Boar.nx - 2, 0), vec2(Boar.cellSizeW));
 
     // Rooks
     Image("./Figures/bR.png", Boar, vec2(0, Boar.ny - 1), vec2(Boar.cellSizeW));
@@ -70,6 +88,9 @@ function main() {
     addListenerMulti(body, "mousemove mouseup", moveFunction);
     addListenerMulti(body, "resize", resizeFunction);
 
+    addListenerMulti(promote, "mousemove mouseup mousedown", moveFunction);
+    addListenerMulti(promote, "resize", resizeFunction);
+
     Boar.setFigures();
     const draw = () => {
         Boar.DrawBoard();
@@ -83,91 +104,258 @@ function main() {
         Boar.DrawCheck("#f7e87dce", "#797979ce");
         Boar.DrawFigures();
         Boar.DrawBorder();
+
+        Prom.DrawBoard();
+        Prom.DrawPosMoves(PromPo);
+        Prom.DrawFigures();
         window.requestAnimationFrame(draw);
     };
     draw();
 }
 
 function moveFunction(e) {
-    if (e.type == "mousedown") {
-        if (e.pageX >= Boar.offsetL && e.pageX <= Boar.offsetL + Boar.w && e.pageY >= Boar.offsetT && e.pageY <= Boar.offsetT + Boar.h) {
-            if (!(IsTouchMode && !(BoardPoOld.x == BoardPo.x && BoardPoOld.y == BoardPo.y))) {
-                if (Boar.board[BoardPo.y][BoardPo.x][0].length > 1) {
-                    IsFigureGot = true;
-                    IsTravell = false;
-                    BoardPoOld = vec2(BoardPo.x, BoardPo.y);
-                    oldPos = vec2(e.clientY, e.clientX);
-                    Boar.board[BoardPo.y][BoardPo.x][1].posx +=
-                        (e.clientX - (Boar.board[BoardPo.y][BoardPo.x][1].posx + 1) * Boar.cellSizeW - Boar.offsetL + Boar.cellSizeW / 2) / Boar.cellSizeW;
+    if ((e.target.id == "body" || e.target.id == "board") && !Boar.isPromote) {
+        PromPo = vec2(-1, -1);
+        if (e.type == "mousedown") {
+            if (e.pageX >= Boar.offsetL && e.pageX <= Boar.offsetL + Boar.w && e.pageY >= Boar.offsetT && e.pageY <= Boar.offsetT + Boar.h) {
+                if (!(IsTouchMode && !(BoardPoOld.x == BoardPo.x && BoardPoOld.y == BoardPo.y))) {
+                    if (Boar.board[BoardPo.y][BoardPo.x][0].length > 1) {
+                        IsFigureGot = true;
+                        IsTravell = false;
+                        BoardPoOld = vec2(BoardPo.x, BoardPo.y);
+                        oldPos = vec2(e.clientY, e.clientX);
+                        Boar.board[BoardPo.y][BoardPo.x][1].posx +=
+                            (e.clientX - (Boar.board[BoardPo.y][BoardPo.x][1].posx + 1) * Boar.cellSizeW - Boar.offsetL + Boar.cellSizeW / 2) / Boar.cellSizeW;
 
-                    Boar.board[BoardPo.y][BoardPo.x][1].posy +=
-                        (e.clientY - (Boar.board[BoardPo.y][BoardPo.x][1].posy + 1) * Boar.cellSizeH - Boar.offsetT + Boar.cellSizeH / 2) / Boar.cellSizeH;
-                    Boar.board[BoardPo.y][BoardPo.x][1].posy = Boar.ny - Boar.board[BoardPo.y][BoardPo.x][1].posy - 1;
-                }
-            } else {
-                if (Boar.canMove(IsLocked.x, IsLocked.y, BoardPo.x, BoardPo.y)) {
-                    changeFields(IsLocked, BoardPo);
-                    IsTouchMode = false;
-                } else if (Boar.board[BoardPo.y][BoardPo.x][1] != undefined && Boar.board[BoardPo.y][BoardPo.x][1].name[0] == Boar.color) {
-                    IsLocked = BoardPo;
-                    IsTouchMode = true;
-                } else {
-                    IsTouchMode = false;
-                }
-            }
-        }
-    } else if (e.type == "mousemove") {
-        if (e.target.id.toString() == "board") {
-            let MousePo = vec2(e.clientY, e.clientX);
-            BoardPo = Boar.GetPosBoard(MousePo);
-            try {
-                if (IsFigureGot) {
-                    if (!(BoardPo.x == BoardPoOld.x && BoardPo.y == BoardPoOld.y)) {
-                        IsTravell = true;
+                        Boar.board[BoardPo.y][BoardPo.x][1].posy +=
+                            (e.clientY - (Boar.board[BoardPo.y][BoardPo.x][1].posy + 1) * Boar.cellSizeH - Boar.offsetT + Boar.cellSizeH / 2) / Boar.cellSizeH;
+                        Boar.board[BoardPo.y][BoardPo.x][1].posy = Boar.ny - Boar.board[BoardPo.y][BoardPo.x][1].posy - 1;
                     }
-                }
-            } catch (err) {}
-        } else {
-            if (!IsFigureGot) {
-                BoardPo = vec2(-1, -1);
-                IsTravell = true;
-            }
-        }
-        if (IsFigureGot) {
-            Boar.board[BoardPoOld.y][BoardPoOld.x][1].posx += (e.clientX - oldPos.y) / Boar.cellSizeW;
-            Boar.board[BoardPoOld.y][BoardPoOld.x][1].posy += (oldPos.x - e.clientY) / Boar.cellSizeH;
-            oldPos = vec2(e.clientY, e.clientX);
-        }
-    } else if (e.type == "mouseup") {
-        if (IsFigureGot) {
-            IsFigureGot = false;
-            if (e.target.id.toString() != "board") {
-                Boar.board[BoardPoOld.y][BoardPoOld.x][1].posx = BoardPoOld.x;
-                Boar.board[BoardPoOld.y][BoardPoOld.x][1].posy = Boar.ny - BoardPoOld.y - 1;
-                IsLocked = vec2(-1, -1);
-                IsTouchMode = false;
-            } else {
-                let tmpx = Math.floor(Boar.board[BoardPoOld.y][BoardPoOld.x][1].posx + 1 / 2),
-                    tmpy = Boar.ny - Math.floor(Boar.board[BoardPoOld.y][BoardPoOld.x][1].posy + 1 / 2) - 1;
-                // Math.floor(Boar.board[BoardPoOld.y][BoardPoOld.x][1].posy + 1 / 2)
-                // console.log(BoardPoOld.x, BoardPoOld.y, tmpx, tmpy);
-                if (!(tmpy == BoardPoOld.y && tmpx == BoardPoOld.x) && Boar.canMove(BoardPoOld.x, BoardPoOld.y, tmpx, tmpy)) {
-                    changeFields(BoardPoOld, vec2(tmpx, tmpy));
-                    IsTouchMode = false;
-                    IsLocked = vec2(-1, -1);
                 } else {
-                    Boar.board[BoardPoOld.y][BoardPoOld.x][1].posx = BoardPoOld.x;
-                    Boar.board[BoardPoOld.y][BoardPoOld.x][1].posy = Boar.ny - BoardPoOld.y - 1;
-                    if (!IsTravell && !IsTouchMode) {
-                        IsLocked = vec2(BoardPoOld.x, BoardPoOld.y);
+                    let cons = Boar.canMove(IsLocked.x, IsLocked.y, BoardPo.x, BoardPo.y);
+                    if (cons[0] && !cons[1]) {
+                        changeFields(IsLocked, BoardPo);
+                        IsTouchMode = false;
+                    } else if (cons[1]) {
+                        IsTouchMode = false;
+                        let x = IsLocked.x;
+                        let y = IsLocked.y;
+                        IsLocked = vec2(-1, -1);
+                        let x2;
+                        if (BoardPo.x > x) {
+                            x2 = Boar.nx - 1;
+                        } else {
+                            x2 = 0;
+                        }
+                        let K = Boar.board[y][x][1];
+                        let R = Boar.board[y][x2][1];
+                        if (x2 > x) {
+                            Boar.board[y][x][0] = Boar.board[y][x][0].slice(0, 1);
+                            Boar.board[y][x][1] = undefined;
+
+                            Boar.board[y][x + 1][0] = Boar.board[y][x + 1][0] + R.name;
+                            Boar.board[y][x + 1][1] = R;
+
+                            Boar.board[y][x2][0] = Boar.board[y][x2][0].slice(0, 1);
+                            Boar.board[y][x2][1] = undefined;
+
+                            Boar.board[y][x + 2][0] = Boar.board[y][x + 2][0] + K.name;
+                            Boar.board[y][x + 2][1] = K;
+
+                            Boar.board[y][x + 2][1].posx = x + 2;
+                            Boar.board[y][x + 2][1].posy = Boar.ny - y - 1;
+
+                            Boar.board[y][x + 1][1].posx = x + 1;
+                            Boar.board[y][x + 1][1].posy = Boar.ny - y - 1;
+
+                            if (Boar.board[y][x + 2][1].name[0] == "w") {
+                                Boar.posKings.w = [y, x + 2];
+                            } else {
+                                Boar.posKings.b = [y, x + 2];
+                            }
+                        } else {
+                            Boar.board[y][x][0] = Boar.board[y][x][0].slice(0, 1);
+                            Boar.board[y][x][1] = undefined;
+
+                            Boar.board[y][x - 1][0] = Boar.board[y][x - 1][0] + R.name;
+                            Boar.board[y][x - 1][1] = R;
+
+                            Boar.board[y][x2][0] = Boar.board[y][x2][0].slice(0, 1);
+                            Boar.board[y][x2][1] = undefined;
+
+                            Boar.board[y][x - 2][0] = Boar.board[y][x - 2][0] + K.name;
+                            Boar.board[y][x - 2][1] = K;
+
+                            Boar.board[y][x - 2][1].posx = x - 2;
+                            Boar.board[y][x - 2][1].posy = Boar.ny - y - 1;
+
+                            Boar.board[y][x - 1][1].posx = x - 1;
+                            Boar.board[y][x - 1][1].posy = Boar.ny - y - 1;
+
+                            if (Boar.board[y][x - 2][1].name[0] == "w") {
+                                Boar.posKings.w = [y, x - 2];
+                            } else {
+                                Boar.posKings.b = [y, x - 2];
+                            }
+                        }
+                    } else if (Boar.board[BoardPo.y][BoardPo.x][1] != undefined && Boar.board[BoardPo.y][BoardPo.x][1].name[0] == Boar.color) {
+                        IsLocked = BoardPo;
                         IsTouchMode = true;
                     } else {
-                        IsLocked = vec2(-1, -1);
                         IsTouchMode = false;
                     }
                 }
             }
+        } else if (e.type == "mousemove") {
+            if (e.target.id.toString() == "board") {
+                let MousePo = vec2(e.clientY, e.clientX);
+                BoardPo = Boar.GetPosBoard(MousePo);
+                try {
+                    if (IsFigureGot) {
+                        if (!(BoardPo.x == BoardPoOld.x && BoardPo.y == BoardPoOld.y)) {
+                            IsTravell = true;
+                        }
+                    }
+                } catch (err) {}
+            } else {
+                if (!IsFigureGot) {
+                    BoardPo = vec2(-1, -1);
+                    IsTravell = true;
+                }
+            }
+            if (IsFigureGot) {
+                Boar.board[BoardPoOld.y][BoardPoOld.x][1].posx += (e.clientX - oldPos.y) / Boar.cellSizeW;
+                Boar.board[BoardPoOld.y][BoardPoOld.x][1].posy += (oldPos.x - e.clientY) / Boar.cellSizeH;
+                oldPos = vec2(e.clientY, e.clientX);
+            }
+        } else if (e.type == "mouseup") {
+            if (IsFigureGot) {
+                IsFigureGot = false;
+                if (e.target.id.toString() != "board") {
+                    Boar.board[BoardPoOld.y][BoardPoOld.x][1].posx = BoardPoOld.x;
+                    Boar.board[BoardPoOld.y][BoardPoOld.x][1].posy = Boar.ny - BoardPoOld.y - 1;
+                    IsLocked = vec2(-1, -1);
+                    IsTouchMode = false;
+                } else {
+                    let tmpx = Math.floor(Boar.board[BoardPoOld.y][BoardPoOld.x][1].posx + 1 / 2),
+                        tmpy = Boar.ny - Math.floor(Boar.board[BoardPoOld.y][BoardPoOld.x][1].posy + 1 / 2) - 1;
+                    let cons = Boar.canMove(BoardPoOld.x, BoardPoOld.y, tmpx, tmpy);
+                    if (!(tmpy == BoardPoOld.y && tmpx == BoardPoOld.x) && cons[0] && !cons[1]) {
+                        changeFields(BoardPoOld, vec2(tmpx, tmpy));
+                        IsTouchMode = false;
+                        IsLocked = vec2(-1, -1);
+                    } else {
+                        console.log(BoardPoOld);
+                        if (!cons[1]) {
+                            Boar.board[BoardPoOld.y][BoardPoOld.x][1].posx = BoardPoOld.x;
+                            Boar.board[BoardPoOld.y][BoardPoOld.x][1].posy = Boar.ny - BoardPoOld.y - 1;
+                        } else {
+                            let x = BoardPoOld.x;
+                            let y = BoardPoOld.y;
+                            let x2;
+                            if (tmpx > x) {
+                                x2 = Boar.nx - 1;
+                            } else {
+                                x2 = 0;
+                            }
+                            let K = Boar.board[y][x][1];
+                            let R = Boar.board[y][x2][1];
+                            if (x2 > x) {
+                                Boar.board[y][x][0] = Boar.board[y][x][0].slice(0, 1);
+                                Boar.board[y][x][1] = undefined;
+
+                                Boar.board[y][x + 1][0] = Boar.board[y][x + 1][0] + R.name;
+                                Boar.board[y][x + 1][1] = R;
+
+                                Boar.board[y][x2][0] = Boar.board[y][x2][0].slice(0, 1);
+                                Boar.board[y][x2][1] = undefined;
+
+                                Boar.board[y][x + 2][0] = Boar.board[y][x + 2][0] + K.name;
+                                Boar.board[y][x + 2][1] = K;
+
+                                Boar.board[y][x + 2][1].posx = x + 2;
+                                Boar.board[y][x + 2][1].posy = Boar.ny - y - 1;
+
+                                Boar.board[y][x + 1][1].posx = x + 1;
+                                Boar.board[y][x + 1][1].posy = Boar.ny - y - 1;
+
+                                if (Boar.board[y][x + 2][1].name[0] == "w") {
+                                    Boar.posKings.w = [y, x + 2];
+                                } else {
+                                    Boar.posKings.b = [y, x + 2];
+                                }
+                            } else {
+                                Boar.board[y][x][0] = Boar.board[y][x][0].slice(0, 1);
+                                Boar.board[y][x][1] = undefined;
+
+                                Boar.board[y][x - 1][0] = Boar.board[y][x - 1][0] + R.name;
+                                Boar.board[y][x - 1][1] = R;
+
+                                Boar.board[y][x2][0] = Boar.board[y][x2][0].slice(0, 1);
+                                Boar.board[y][x2][1] = undefined;
+
+                                Boar.board[y][x - 2][0] = Boar.board[y][x - 2][0] + K.name;
+                                Boar.board[y][x - 2][1] = K;
+
+                                Boar.board[y][x - 2][1].posx = x - 2;
+                                Boar.board[y][x - 2][1].posy = Boar.ny - y - 1;
+
+                                Boar.board[y][x - 1][1].posx = x - 1;
+                                Boar.board[y][x - 1][1].posy = Boar.ny - y - 1;
+
+                                if (Boar.board[y][x - 2][1].name[0] == "w") {
+                                    Boar.posKings.w = [y, x - 2];
+                                } else {
+                                    Boar.posKings.b = [y, x - 2];
+                                }
+                            }
+                        }
+                        if (!IsTravell && !IsTouchMode) {
+                            IsLocked = vec2(BoardPoOld.x, BoardPoOld.y);
+                            IsTouchMode = true;
+                        } else {
+                            IsLocked = vec2(-1, -1);
+                            IsTouchMode = false;
+                        }
+                    }
+                }
+            }
         }
+    } else if (e.target.id == "promote") {
+        if (e.type == "mousemove") {
+            let r = e.clientX - promote.offsetLeft;
+            if (r == 0) {
+                r = 1;
+            }
+            PromPo = vec2(Math.floor(r / Prom.cellSizeW), 0);
+            if (PromPo.x != PromFig) {
+                PromFig = -1;
+            }
+        } else if (e.type == "mousedown") {
+            PromFig = PromPo.x;
+        } else if (e.type == "mouseup") {
+            if (PromFig != -1 && PromFig == PromPo.x && Boar.toPromote.x >= 0) {
+                Boar.isPromote = false;
+                // console.log(Boar.board[Boar.toPromote.y][Boar.toPromote.x]);
+                Boar.board[Boar.toPromote.y][Boar.toPromote.x][1] = undefined;
+                let NewFigName = FigToProm[PromFig].name;
+                NewFigName = Boar.board[Boar.toPromote.y][Boar.toPromote.x][0].slice(1, 2) + NewFigName.slice(1, 2);
+                Boar.board[Boar.toPromote.y][Boar.toPromote.x][0] = Boar.board[Boar.toPromote.y][Boar.toPromote.x][0].slice(0, 1);
+                // console.log(Boar.toPromote, Boar.board);
+                // Boar.board[Boar.toPromote.x][Boar.toPromote.y][0] = Boar.board[Boar.toPromote.x][Boar.toPromote.y][0] + FigToProm[PromFig].name;
+                Image(`./Figures/${NewFigName}.png`, Boar, vec2(Boar.toPromote.x, Boar.ny - Boar.toPromote.y - 1), vec2(Boar.cellSizeW, Boar.cellSizeH));
+                Boar.toPromote = vec2(-1, -1);
+                Boar.setFigures();
+                promote.style.display = "none";
+            }
+        }
+    } else {
+        if (Boar.isPromote) {
+            promote.style.display = "block";
+        } else {
+            promote.style.display = "none";
+        }
+        PromPo = vec2(-1, -1);
     }
     // console.log(e.type, e.pageX, e.pageY);
 }

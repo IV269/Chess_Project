@@ -1,10 +1,10 @@
 import { vec2, Image } from "./lib.js";
 
 class _Board {
-    constructor(canvas, nx, blackcolor = "rgb(12,36,98)", whitecolor = "rgb(178 189,231)") {
+    constructor(canvas, nx, ny = -1, blackcolor = "rgb(12,36,98)", whitecolor = "rgb(178 189,231)") {
         this.can = canvas;
-        let ny = nx;
-        if (nx > 5) {
+        // let ny = nx;
+        if (nx > 0) {
             this.nx = nx;
         } else {
             this.nx = 8;
@@ -12,7 +12,7 @@ class _Board {
         if (ny < 1) {
             this.ny = this.nx;
         } else {
-            if (ny > 5) {
+            if (ny > 0) {
                 this.ny = ny;
             } else {
                 this.ny = this.nx;
@@ -31,6 +31,9 @@ class _Board {
 
         this.w = this.can.width;
         this.h = this.can.height;
+
+        // this.w = Math
+
         this.constW = this.can.width;
         this.constH = this.can.height;
         this.cellSizeW = this.w / this.nx;
@@ -49,6 +52,8 @@ class _Board {
         this.RokirW = [true, true];
         this.RokirB = [true, true];
         this.isRok = false;
+        this.toPromote = vec2(-1, -1);
+        this.isPromote = false;
 
         for (let y = 0; y < this.ny; y++) {
             this.board[y] = [];
@@ -70,10 +75,10 @@ class _Board {
         let kx = 0,
             ky = 0;
         let diff = 0;
-        if (width < this.w) {
+        if (width < this.w * this.nx) {
             kx = Math.ceil((this.w - width) / this.nx);
         }
-        if (height < this.h) {
+        if (height < this.h * this.ny) {
             ky = Math.ceil((this.h - height) / this.ny);
         }
         diff = Math.max(kx * this.nx, ky * this.ny);
@@ -237,7 +242,7 @@ class _Board {
                         ctx.fillRect((x1 * this.w) / this.nx, (y1 * this.h) / this.ny, this.w / this.nx, this.h / this.ny);
                         this.Poses.add(["old", vec2(x1, y1)]);
                     } else {
-                        if (this.board[y1][x1][1] != undefined && this.canMove(x1, y1, x, y, false)) {
+                        if (this.board[y1][x1][1] != undefined && this.canMove(x1, y1, x, y, false)[0]) {
                             let posx, posy, a;
                             if (this.board[y][x][1] == undefined && !this.enPasant) {
                                 ctx.fillStyle = poscolor;
@@ -436,6 +441,7 @@ class _Board {
     canMove(x, y, x2, y2, tomove = true, tocheck = false) {
         let fig = this.board[y][x][1].figure;
         let ans = false;
+        let confalse = false;
         this.enPasant = false;
         if (fig.color == this.color || tocheck) {
             if (fig.name == "P") {
@@ -546,6 +552,12 @@ class _Board {
                 if (((dx == 1 && dy == 2) || (dx == 2 && dy == 1)) && (this.board[y2][x2][1] == undefined || this.board[y2][x2][1].name[0] != this.color)) {
                     ans = true;
                 }
+            } else if (fig.name == "C") {
+                let dx = Math.abs(x - x2),
+                    dy = Math.abs(y - y2);
+                if (((dx == 1 && dy == 3) || (dx == 3 && dy == 1)) && (this.board[y2][x2][1] == undefined || this.board[y2][x2][1].name[0] != this.color)) {
+                    ans = true;
+                }
             } else if (fig.name == "R") {
                 let conlin;
                 if (x == x2) {
@@ -632,8 +644,15 @@ class _Board {
                         }
                         this.board[y][x][1] = f;
                     }
-                } else if ((x2 == 0 || x2 == this.nx - 1) && y2 == y) {
+                } else if ((x2 == 0 || x2 == this.nx - 1 || Math.abs(x - x2) == 2) && y2 == y) {
                     let conpos = false;
+                    if (Math.abs(x - x2) == 2) {
+                        if (x2 > x) {
+                            x2 = this.nx - 1;
+                        } else {
+                            x2 = 0;
+                        }
+                    }
                     if (x2 == 0) {
                         if (this.color == "w") {
                             conpos = this.RokirW[0];
@@ -647,6 +666,14 @@ class _Board {
                             conpos = this.RokirB[1];
                         }
                     }
+                    if (
+                        this.board[y][x2][1] == undefined ||
+                        this.board[y][x2][1].name == undefined ||
+                        this.board[y][x2][1].name[0] != this.color ||
+                        this.board[y][x2][1].name[1] != "R"
+                    ) {
+                        conpos = false;
+                    }
                     if (conpos) {
                         let xmin = Math.min(x, x2),
                             xmax = Math.max(x, x2);
@@ -656,8 +683,32 @@ class _Board {
                                 config = false;
                             }
                         }
+                        let concheckfig = false;
                         if (config) {
-                            this.isRok = true;
+                            for (let y3 = 0; y3 < this.ny && !concheckfig; y3++) {
+                                for (let x3 = 0; x3 < this.nx && !concheckfig; x3++) {
+                                    if (this.board[y3][x3][1] != undefined && this.board[y3][x3][1].name[0] != this.color) {
+                                        for (let i = 0; i <= 2 && !concheckfig; i++) {
+                                            this.changeColor();
+                                            if (i != 0) {
+                                                this.board[y][x + Math.sign(x2 - x) * i][1] = this.board[y][x][1];
+                                            }
+                                            if (this.canMove(x3, y3, x + Math.sign(x2 - x) * i, y, false)[0]) {
+                                                concheckfig = true;
+                                            }
+                                            if (i != 0) {
+                                                this.board[y][x + Math.sign(x2 - x) * i][1] = undefined;
+                                            }
+                                            this.changeColor();
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if (config && !concheckfig) {
+                            if (tomove) {
+                                this.isRok = true;
+                            }
                             ans = true;
                         }
                     }
@@ -685,7 +736,7 @@ class _Board {
                     for (let x3 = 0; x3 < this.nx; x3++) {
                         if (this.board[y3][x3][1] != undefined && this.board[y3][x3][1].name[0] != this.color) {
                             this.changeColor();
-                            if (this.canMove(x3, y3, x4, y4, false, true)) {
+                            if (this.canMove(x3, y3, x4, y4, false, true)[0]) {
                                 concheck = true;
                                 ans = false;
                             }
@@ -717,7 +768,7 @@ class _Board {
             let tmp2 = this.board[y2][x2][1];
             this.board[y2][x2][1] = tmp1;
             this.board[y][x][1] = undefined;
-            if (this.canMove(x2, y2, pos[1], pos[0], false, true)) {
+            if (this.canMove(x2, y2, pos[1], pos[0], false, true)[0]) {
                 if (this.color == "w") {
                     this.isUnderCheckB = true;
                 } else {
@@ -731,7 +782,7 @@ class _Board {
                 for (let y3 = 0; y3 < this.ny; y3++) {
                     for (let x3 = 0; x3 < this.nx; x3++) {
                         if (this.board[y3][x3][1] != undefined && this.board[y3][x3][1].name[0] == this.color) {
-                            if (this.canMove(x3, y3, pos[1], pos[0], false, true)) {
+                            if (this.canMove(x3, y3, pos[1], pos[0], false, true)[0]) {
                                 if (this.color == "w") {
                                     this.isUnderCheckB = true;
                                 } else {
@@ -761,7 +812,7 @@ class _Board {
                     if (this.board[y3][x3][1] != undefined && this.board[y3][x3][1].name[0] == this.color) {
                         for (let y4 = 0; y4 < this.ny && Pat; y4++) {
                             for (let x4 = 0; x4 < this.nx && Pat; x4++) {
-                                if (this.canMove(x3, y3, x4, y4, false)) {
+                                if (this.canMove(x3, y3, x4, y4, false)[0]) {
                                     Pat = false;
                                 }
                             }
@@ -858,35 +909,37 @@ class _Board {
                 }
             } else if (fig.name == "R") {
                 if (fig.color == "w") {
-                    if (x == 0) {
+                    if (x == 0 && (y == this.ny - 1 || y2 == this.ny - 1)) {
                         this.RokirW[0] = false;
-                    } else {
+                    } else if (x == this.nx - 1 && (y == this.ny - 1 || y2 == this.ny - 1)) {
                         this.RokirW[1] = false;
                     }
                 } else {
-                    if (x == 0) {
+                    if (x == 0 && (y == 0 || y2 == 0)) {
                         this.RokirB[0] = false;
-                    } else {
+                    } else if (x == this.nx - 1 && (y == 0 || y2 == 0)) {
                         this.RokirB[1] = false;
                     }
                 }
             }
-            console.log("W:", this.RokirW);
-            console.log("B:", this.RokirB);
+            // console.log("W:", this.RokirW);
+            // console.log("B:", this.RokirB);
             if (this.isRok) {
-                let K = this.board[y][x][1];
-                let R = this.board[y][x2][1];
-                this.board[y][x][0] = this.board[y][x][0].slice(0, 1);
-                this.board[y][x][0] = this.board[y][x][0] + R.name;
                 // console.log(this.board[y][x][0]);
                 this.isRok = false;
+                confalse = true;
             }
 
             // Changing color
             this.lastMoved = [x2, y2];
             this.changeColor();
+            if (this.board[y][x][1].name[1] == "P" && ((this.board[y][x][1].name[0] == "b" && y2 == this.ny - 1) || (this.board[y][x][1].name[0] == "w" && y2 == 0))) {
+                console.log("Pawn need to be promoted.");
+                this.toPromote = vec2(x2, y2);
+                this.isPromote = true;
+            }
         }
-        return ans;
+        return [ans, confalse];
     }
 
     underCheck(x2, y2) {
@@ -902,7 +955,7 @@ class _Board {
                 if (!(x3 == x2 && y2 == y3)) {
                     if (this.board[y3][x3][1] != undefined && this.board[y3][x3][1].name[0] != this.color) {
                         if (this.board[y3][x3][1].name[1] == "P") {
-                            if (this.canMove(x3, y3, x2, y2, false, true)) {
+                            if (this.canMove(x3, y3, x2, y2, false, true)[0]) {
                                 if (!r) {
                                     this.board[y2][x2][1].name = j;
                                 } else {
@@ -912,7 +965,7 @@ class _Board {
                             }
                         } else {
                             this.changeColor();
-                            if (this.canMove(x3, y3, x2, y2, false, true)) {
+                            if (this.canMove(x3, y3, x2, y2, false, true)[0]) {
                                 if (!r) {
                                     this.board[y2][x2][1].name = j;
                                 } else {

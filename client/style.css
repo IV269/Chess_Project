@@ -1,4 +1,4 @@
-canvas {
+#board {
     display: block;
     margin: auto auto;
     transform: translateY(50px);
@@ -7,6 +7,14 @@ canvas {
     border-bottom: #a37724 15px groove !important;
     border-top: #a37724 15px ridge !important;
     border-left: #a37724 15px ridge !important; */
+}
+
+#promote {
+    transform: translateY(50px);
+    margin: auto;
+    display: none;
+    /* else */
+    /* display: block; */
 }
 
 * {
@@ -19,4 +27,5 @@ html {
     height: 100%;
     padding: 0;
     margin: 0;
+    background-color: rgb(255, 255, 255);
 }
